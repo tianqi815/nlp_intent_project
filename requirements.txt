@@ -1,0 +1,15 @@
+# NLP 意图识别常用依赖，按需增删
+torch>=2.0.0
+transformers>=4.30.0
+datasets
+scikit-learn
+pandas
+numpy
+openpyxl
+peft>=0.10.0
+
+# FastAPI 测试平台
+fastapi>=0.100.0
+uvicorn[standard]>=0.22.0
+requests>=2.31.0
+semantic-router

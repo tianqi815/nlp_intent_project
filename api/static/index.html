@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>意图识别模型 - 真实测试</title>
+  <style>
+    :root { --bg: #0f0f12; --card: #1a1a20; --border: #2a2a32; --text: #e4e4e7; --muted: #71717a; --accent: #a78bfa; --success: #34d399; --error: #f87171; }
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; min-height: 100vh; padding: 2rem; }
+    .container { max-width: 640px; margin: 0 auto; }
+    h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
+    label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 0.35rem; }
+    textarea { width: 100%; min-height: 88px; padding: 0.75rem; background: #25252c; border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 1rem; resize: vertical; }
+    textarea::placeholder { color: var(--muted); }
+    button { margin-top: 0.75rem; padding: 0.6rem 1.2rem; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 0.95rem; cursor: pointer; }
+    button:hover { filter: brightness(1.1); }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .result { margin-top: 1rem; }
+    .result-item { padding: 0.75rem; background: #25252c; border-radius: 8px; margin-top: 0.5rem; border-left: 3px solid var(--accent); }
+    .result-item .label { font-weight: 600; color: var(--success); }
+    .result-item .confidence { color: var(--muted); font-size: 0.9rem; }
+    .feedback-row { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+    .feedback-row .prompt { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.4rem; }
+    .feedback-btns { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .feedback-btns button { margin-top: 0; }
+    .feedback-btns button.secondary { background: var(--border); color: var(--text); }
+    .feedback-btns button.secondary:hover { filter: brightness(1.15); }
+    .correct-options { margin-top: 0.5rem; }
+    .correct-options label { display: inline-flex; align-items: center; margin-right: 1rem; cursor: pointer; font-size: 0.9rem; color: var(--text); }
+    .correct-options input { margin-right: 0.35rem; }
+    .feedback-done { color: var(--success); font-size: 0.9rem; margin-top: 0.5rem; }
+    .error { color: var(--error); margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>意图识别模型 · 真实测试</h1>
+    <p class="sub">输入任意问题，查看模型预测的最终意图（project monitoring / purchasing record summary / general_response）。</p>
+
+    <div class="card">
+      <label for="input">输入问题</label>
+      <textarea id="input" placeholder="例如：你好在吗 / 玻璃门配件有哪些 / 讲个笑话"></textarea>
+      <button id="btn" type="button">预测</button>
+      <div id="error" class="error"></div>
+      <div id="result" class="result"></div>
+    </div>
+  </div>
+
+  <script>
+    const input = document.getElementById('input');
+    const btn = document.getElementById('btn');
+    const resultEl = document.getElementById('result');
+    const errorEl = document.getElementById('error');
+
+    let lastPrediction = null;
+
+    async function renderResult(item) {
+      lastPrediction = { text: item.text, label: item.label, label_id: item.label_id };
+      let labelOptions = [];
+      try {
+        const r = await fetch('/labels');
+        const data = await r.json();
+        if (r.ok && data && data.id_to_label) {
+          labelOptions = Object.keys(data.id_to_label)
+            .map(k => parseInt(k, 10))
+            .filter(n => Number.isFinite(n))
+            .sort((a, b) => a - b)
+            .map(id => ({ id, name: data.id_to_label[String(id)] }));
+        }
+      } catch (_) {
+        // ignore; fallback below
+      }
+      if (!labelOptions.length) {
+        // fallback：至少保证页面可用
+        labelOptions = [
+          { id: 0, name: 'label_0' },
+          { id: 1, name: 'label_1' },
+          { id: 2, name: 'label_2' },
+        ];
+      }
+
+      const radiosHtml = labelOptions
+        .map(o => `<label><input type="radio" name="correctLabel" value="${o.id}" /> ${o.name}</label>`)
+        .join('');
+
+      const feedbackHtml = `
+        <div class="feedback-row" id="feedbackRow">
+          <div class="prompt">模型输出是否正确？</div>
+          <div class="feedback-btns">
+            <button type="button" id="btnCorrect" class="secondary">正确</button>
+            <button type="button" id="btnWrong">错误</button>
+          </div>
+          <div class="correct-options" id="correctOptions" style="display:none;">
+            <div class="prompt">正确答案：</div>
+            ${radiosHtml}
+            <button type="button" id="btnSubmitFeedback" style="margin-left:0.5rem;">提交反馈</button>
+          </div>
+          <div class="feedback-done" id="feedbackDone" style="display:none;"></div>
+        </div>
+      `;
+      resultEl.innerHTML = `
+        <div class="result-item">
+          <div class="label">预测意图: ${item.label}</div>
+          <div class="confidence">置信度: ${(item.confidence * 100).toFixed(2)}%</div>
+          ${feedbackHtml}
+        </div>
+      `;
+      const feedbackRow = document.getElementById('feedbackRow');
+      const correctOptions = document.getElementById('correctOptions');
+      const feedbackDone = document.getElementById('feedbackDone');
+
+      document.getElementById('btnCorrect').addEventListener('click', () => submitFeedback(true, null));
+      document.getElementById('btnWrong').addEventListener('click', () => {
+        correctOptions.style.display = 'block';
+      });
+      document.getElementById('btnSubmitFeedback').addEventListener('click', () => {
+        const radio = document.querySelector('input[name="correctLabel"]:checked');
+        if (!radio) {
+          errorEl.textContent = '请选择正确答案';
+          return;
+        }
+        errorEl.textContent = '';
+        submitFeedback(false, parseInt(radio.value, 10));
+      });
+    }
+
+    async function submitFeedback(isCorrect, correctLabelId) {
+      if (!lastPrediction) return;
+      const payload = {
+        text: lastPrediction.text,
+        predicted_label: lastPrediction.label,
+        predicted_label_id: lastPrediction.label_id,
+        is_correct: isCorrect,
+        correct_label_id: isCorrect ? null : correctLabelId
+      };
+      const feedbackRow = document.getElementById('feedbackRow');
+      const feedbackDone = document.getElementById('feedbackDone');
+      const correctOptions = document.getElementById('correctOptions');
+      [].slice.call(feedbackRow.querySelectorAll('button')).forEach(b => { b.disabled = true; });
+      try {
+        const res = await fetch('/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || res.statusText);
+        feedbackRow.querySelector('.feedback-btns').style.display = 'none';
+        correctOptions.style.display = 'none';
+        feedbackDone.style.display = 'block';
+        feedbackDone.textContent = data.message || (isCorrect ? '感谢反馈' : '已记录，将用于后续训练');
+      } catch (e) {
+        errorEl.textContent = e.message || '反馈提交失败';
+        [].slice.call(feedbackRow.querySelectorAll('button')).forEach(b => { b.disabled = false; });
+      }
+    }
+
+    btn.addEventListener('click', async () => {
+      const text = (input.value || '').trim();
+      errorEl.textContent = '';
+      resultEl.innerHTML = '';
+      lastPrediction = null;
+      if (!text) {
+        errorEl.textContent = '请输入问题文本';
+        return;
+      }
+      btn.disabled = true;
+      try {
+        const res = await fetch('/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || res.statusText);
+        const item = data[0];
+        await renderResult(item);
+      } catch (e) {
+        errorEl.textContent = e.message || '请求失败';
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

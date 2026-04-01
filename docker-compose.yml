@@ -1,0 +1,12 @@
+# 一键启动你的 NLP 项目容器（可选）
+# 使用: docker compose up -d && docker compose exec app bash
+services:
+  app:
+    build: .
+    image: nlp-intent:latest
+    container_name: nlp_intent_techadmin
+    volumes:
+      # 把当前项目目录挂载进容器，改代码即时生效
+      - .:/app
+    stdin_open: true
+    tty: true

@@ -1,0 +1,53 @@
+# 虚拟环境
+my_nlp/
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# 机器学习：大模型权重与训练产物（勿提交）
+*.safetensors
+pytorch_model.bin
+model.ckpt
+*.onnx
+**/checkpoint-*/
+optimizer.pt
+scheduler.pt
+rng_state.pth
+training_args.bin
+
+# 两阶段模型与旧版 LoRA：整目录不纳入版本控制
+intent_two_stage_modernbert/
+intent_binary_lora_modernbert/
+
+# 环境与密钥
+.env
+.env.local
+*.pem
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 测试与工具缓存
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# 其他
+*.log
+.DS_Store
