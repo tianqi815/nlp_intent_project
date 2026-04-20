@@ -29,6 +29,21 @@ training_args.bin
 # 两阶段模型与旧版 LoRA：整目录不纳入版本控制
 intent_two_stage_modernbert/
 intent_binary_lora_modernbert/
+# 基准/实验用二阶段训练产物（与上面同级，含 tokenizer、config 与权重）
+bench_intent_two_stage_modernbert/
+
+# 训练跟踪、实验输出与本地缓存（勿提交）
+wandb/
+mlruns/
+.neptune/
+runs/
+lightning_logs/
+outputs/
+experiments/
+.cache/
+
+# Jupyter
+.ipynb_checkpoints/
 
 # 环境与密钥
 .env
@@ -51,3 +66,4 @@ htmlcov/
 # 其他
 *.log
 .DS_Store
+Thumbs.db
